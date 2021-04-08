@@ -1,0 +1,31 @@
+[tool.poetry]
+name = "slakh-dataset"
+version = "0.1.0"
+description = "Unofficial PyTorch dataset for Slakh"
+authors = ["Henrik Grønbech <henrikgronbech@gmail.com>"]
+
+[tool.black]
+line-length = 120
+target_version = ['py38']
+include = '\.py$'
+
+[tool.isort]
+profile = "black"
+skip_glob = '^((?!py$).)*$'    # this makes sort all Python files
+
+[tool.poetry.dependencies]
+python = "^3.7"
+torch = "^1.8.1"
+pretty_midi = "^0.2.9"
+torchaudio = "^0.8.1"
+PyYAML = "^5.4.1"
+tqdm = "^4.60.0"
+
+[tool.poetry.dev-dependencies]
+pytest = "^5.2"
+black = "^20.8b1"
+isort = "^5.8.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
