@@ -45,7 +45,7 @@ def instrument_to_midi_programs(instrument: str) -> List[int]:
     raise RuntimeError()
 
 
-def load_audio(path: str, frame_offset: int = 0, num_frames: int = -1, normalize: bool = True) -> torch.Tensor:
+def load_audio(path: str, frame_offset: int = 0, num_frames: int = -1, normalize: bool = False) -> torch.Tensor:
     audio = torchaudio.load(path, frame_offset=frame_offset, num_frames=num_frames, normalize=normalize)[0]
     if audio.dtype == torch.float32 and len(audio.shape) == 2 and audio.shape[0] == 1:
         audio.squeeze_()
@@ -136,7 +136,6 @@ class PianoRollAudioDataset(Dataset):
             label = labels.label.to(self.device)
             velocity = labels.velocity.to(self.device).float()
 
-        audio = audio.float().div_(32768.0)
         onset = (label == 3).float()
         offset = (label == 1).float()
         frame = (label > 1).float()
@@ -256,8 +255,9 @@ class SlakhAmtDataset(PianoRollAudioDataset):
 
         result = []
         for track in tqdm(split_tracks[group]):
-            track_folder_list = sorted(glob(os.path.join(self.path, "*", track)))
-            assert len(track_folder_list) == 1
+            glob_path = os.path.join(self.path, "**", track)
+            track_folder_list = sorted(glob(glob_path))
+            assert len(track_folder_list) == 1, (glob_path, track_folder_list)
             track_folder = track_folder_list[0]
 
             yaml_path = os.path.join(track_folder, "metadata.yaml")
