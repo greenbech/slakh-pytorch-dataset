@@ -1,18 +1,28 @@
-from typing import List, Tuple
+from typing import List, NamedTuple, Tuple
 
 from pretty_midi import PrettyMIDI
+from pretty_midi.utilities import pitch_bend_to_semitones
 
 from .constants import MAX_MIDI, MIN_MIDI
 
 
-def parse_midis(paths: List[str]) -> List[Tuple[int, int, int, int, int]]:
+class MidiData(NamedTuple):
+    data: List[Tuple[int, int, int, int, int]]
+    contain_pitch_bend: bool
+
+
+def parse_midis(paths: List[str]) -> MidiData:
     """open midi files and list of (instrument, onset, offset, note, velocity) rows"""
     data = []
+    contain_pitch_bend = False
     for path in paths:
         mid = PrettyMIDI(path)
 
         notes_out_of_range = set()
         for instrument in mid.instruments:
+            if any((abs(pitch_bend_to_semitones(p.pitch)) >= 0.5 for p in instrument.pitch_bends)):
+                contain_pitch_bend = True
+
             for note in instrument.notes:
                 if int(note.pitch) in range(MIN_MIDI, MAX_MIDI + 1):
                     data.append(
@@ -30,5 +40,6 @@ def parse_midis(paths: List[str]) -> List[Tuple[int, int, int, int, int]]:
             print(
                 f"{len(notes_out_of_range)} notes out of MIDI range ({MIN_MIDI},{MAX_MIDI}) for file {path}. Excluded pitches: {notes_out_of_range}"
             )
+
     data.sort(key=lambda x: x[1])
-    return data
+    return MidiData(data=data, contain_pitch_bend=contain_pitch_bend)

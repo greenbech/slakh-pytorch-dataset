@@ -222,6 +222,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         instrument: str,
         groups=None,
         sequence_length=None,
+        skip_pitch_bend_tracks=False,
         seed=42,
         device=DEFAULT_DEVICE,
         num_files=None,
@@ -230,6 +231,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
     ):
         self.split = split
         self.audio = audio
+        self.skip_pitch_bend_track = skip_pitch_bend_tracks
         super().__init__(
             path,
             instrument,
@@ -256,7 +258,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
             midi_programs = instrument_to_midi_programs(self.instrument)
 
         result = []
-        for track in tqdm(split_tracks[group]):
+        for track in tqdm(split_tracks[group], desc=f"Loading groups {self.groups}"):
             glob_path = os.path.join(self.path, "**", track)
             track_folder_list = sorted(glob(glob_path))
             assert len(track_folder_list) == 1, (glob_path, track_folder_list)
@@ -287,10 +289,17 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                 audio_paths = [os.path.join(track_folder, "mix.flac")]
 
             tsv_filename = os.path.join(track_folder, "-".join(relevant_stems) + ".tsv")
-            if not os.path.exists(tsv_filename):
-                midi = parse_midis(midi_paths)
-                np.savetxt(
-                    tsv_filename, midi, fmt="%.6f", delimiter="\t", header="instrument\tonset\toffset\tnote\tvelocity"
-                )
+            midi_data = parse_midis(midi_paths)
+            if self.skip_pitch_bend_track and midi_data.contain_pitch_bend:
+                continue
+            np.savetxt(
+                tsv_filename,
+                midi_data.data,
+                fmt="%.6f",
+                delimiter="\t",
+                header="instrument\tonset\toffset\tnote\tvelocity",
+            )
             result.append((audio_paths, tsv_filename))
+
+        print(f"Kept {len(result)} files for groups {self.groups}")
         return result

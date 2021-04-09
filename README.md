@@ -7,7 +7,7 @@ Unofficial PyTorch dataset for [Slakh](http://www.slakh.com/).
 ### Automatic music transcription (AMT) usecase with audio and labels
 
 - [x] Specify dataset split (`original`, `splits_v2`, `redux`)
-- [ ] Add new splits (`redux_no_pitch_bend`, ...) (Should also be filed upstream)
+- [x] Add new splits (`redux_no_pitch_bend`, ...) (Should also be filed upstream) (implemented by `skip_pitch_bend_tracks`)
 - [x] Load audio `mix.flac` (all the instruments comined)
 - [x] Load individual audio mixes (need to combine audio in a streaming fashion)
 - [x] Specify `train`, `validation` or `test` group
@@ -47,6 +47,7 @@ dataset = SlakhAmtDataset(
     instrument='electric-bass', # or `midi_programs`
     # midi_programs=[33, 34, 35, 36, 37],
     groups=['train'],
+    skip_pitch_bend_tracks=True,
     sequence_length=327680,
     max_files_in_memory=200,
 )
