@@ -23,17 +23,16 @@ Unofficial PyTorch dataset for [Slakh](http://www.slakh.com/).
 
 ## Usage
 
-TODO: Install the dataset from pip:
+1. Download the Slakh dataset (see the official [website](http://www.slakh.com/)). It's about 100GB compressed so expect using some time on this point.
 
+2. Install the Python package with pip:
 ```bash
 pip install slakh-dataset
 ```
 
-Download the Slakh dataset (see the official [website](http://www.slakh.com/)).
+3. Convert the audio to 16 kHz (see https://github.com/ethman/slakh-utils)
 
-Convert the audio to 16 kHz (instructions will come).
-
-You can use the dataset
+4. You can use the dataset (AMT usecase):
 
 ```python
 from torch.utils.data import DataLoader
@@ -41,7 +40,7 @@ from slakh_dataset import SlakhAmtDataset
 
 
 dataset = SlakhAmtDataset(
-    path='path/to/slakh-16khz-wav-folder'
+    path='path/to/slakh-16khz-folder'
     split='redux', # 'splits_v2','redux-no-pitch-bend'
     audio='mix', # 'mix'
     instrument='electric-bass', # or `midi_programs`
