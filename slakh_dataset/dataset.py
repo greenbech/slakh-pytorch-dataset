@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import pathlib
 from abc import abstractmethod
 from glob import glob
 from typing import List, NamedTuple
@@ -36,13 +37,14 @@ class Labels(NamedTuple):
 
 
 def instrument_to_midi_programs(instrument: str) -> List[int]:
+    avaliable_instruments = ["electric-bass", "bass", "all"]
     if instrument == "electric-bass":
         return list(range(33, 37))
     if instrument == "bass":
         return list(range(32, 37))
-    if instrument == "other":
+    if instrument == "all":
         return list(range(0, 112))
-    raise RuntimeError()
+    raise RuntimeError(f"Unsupported instrument {instrument}. Avaliable instruments: {avaliable_instruments}")
 
 
 def load_audio(paths: List[str], frame_offset: int = 0, num_frames: int = -1, normalize: bool = False) -> torch.Tensor:
@@ -257,7 +259,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         return ["train", "validation", "test"]
 
     def files(self, group):
-        with open(os.path.join("slakh_dataset", "splits", f"{self.split}.json"), "r") as f:
+        with open(os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"{self.split}.json"), "r") as f:
             split_tracks = json.load(f)
 
         if self.instrument == "drums":
