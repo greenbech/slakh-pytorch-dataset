@@ -15,7 +15,7 @@ Unofficial PyTorch dataset for [Slakh](http://www.slakh.com/).
 - [x] Reproducable load sequences (usefull for validation group to get consistent results)
 - [ ] Add more instruments (`eletric-bass`, `piano`, `guitar`, ...)
 - [x] Choose between having audio in memory or stream from disk (solved by `max_files_in_memory`)
-- [ ] Add to pip
+- [x] Add to pip
 
 ### Audio source separation usecase with different audio mixes
 - [ ] List to come
