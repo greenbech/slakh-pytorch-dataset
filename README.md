@@ -8,8 +8,8 @@ Unofficial PyTorch dataset for [Slakh](http://www.slakh.com/).
 
 - [x] Specify dataset split (`original`, `splits_v2`, `redux`)
 - [ ] Add new splits (`redux_no_pitch_bend`, ...) (Should also be filed upstream)
-- [x] Load audio mix (all the instruments comined)
-- [ ] Load individual audio mixes (need to combine audio in a streaming fashion)
+- [x] Load audio `mix.flac` (all the instruments comined)
+- [x] Load individual audio mixes (need to combine audio in a streaming fashion)
 - [x] Specify `train`, `validation` or `test` group
 - [x] Choose sequence length
 - [x] Reproducable load sequences (usefull for validation group to get consistent results)

@@ -1,4 +1,4 @@
-from typing import NamedTuple
+from typing import NamedTuple, List
 
 import torch
 
@@ -15,6 +15,6 @@ class MusicAnnotation(NamedTuple):
 class AudioAndLabels(NamedTuple):
     """Audio and label class with data that will be on GPU"""
 
-    path: str
+    paths: List[str]
     audio: torch.FloatTensor  # [num_steps, n_mels]
     annotation: MusicAnnotation

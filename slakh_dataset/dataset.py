@@ -26,8 +26,8 @@ from .midi import parse_midis
 
 
 class Labels(NamedTuple):
-    # path to audio file
-    path: str
+    # paths to audio files (must be equal length)
+    paths: List[str]
     # a matrix that contains the onset/offset/frame labels encoded as:
     # 3 = onset, 2 = frames after onset, 1 = offset, 0 = all else
     label: torch.ByteTensor  # [num_steps, midi_bins]
@@ -45,8 +45,10 @@ def instrument_to_midi_programs(instrument: str) -> List[int]:
     raise RuntimeError()
 
 
-def load_audio(path: str, frame_offset: int = 0, num_frames: int = -1, normalize: bool = False) -> torch.Tensor:
-    audio = torchaudio.load(path, frame_offset=frame_offset, num_frames=num_frames, normalize=normalize)[0]
+def load_audio(paths: List[str], frame_offset: int = 0, num_frames: int = -1, normalize: bool = False) -> torch.Tensor:
+    audio = torchaudio.load(paths[0], frame_offset=frame_offset, num_frames=num_frames, normalize=normalize)[0]
+    for path in paths[1:]:
+        audio += torchaudio.load(path, frame_offset=frame_offset, num_frames=num_frames, normalize=normalize)[0]
     if audio.dtype == torch.float32 and len(audio.shape) == 2 and audio.shape[0] == 1:
         audio.squeeze_()
     else:
@@ -88,27 +90,27 @@ class PianoRollAudioDataset(Dataset):
         self.reproducable_load_sequences = reproducable_load_sequences
 
     def __getitem__(self, index) -> AudioAndLabels:
-        audio_path, tsv_path = self.file_list[index]
+        audio_paths, tsv_path = self.file_list[index]
         audio = None
         if index < self.max_files_in_memory:
             audio = self.audios[index]
 
             # The first time the audio needs to be loaded in memory
             if audio is None:
-                audio = load_audio(audio_path, normalize=False)
+                audio = load_audio(audio_paths, normalize=False)
                 self.audios[index] = audio
 
         labels: Labels = self.labels[index]
         # The first the labels needs to be loaded in memory
         if labels is None:
-            labels = self.load_labels(audio_path, tsv_path)
+            labels = self.load_labels(audio_paths, tsv_path)
             self.labels[index] = labels
 
         if self.sequence_length is not None:
-            audio_length = torchaudio.info(audio_path).num_frames
+            audio_length = torchaudio.info(audio_paths[0]).num_frames
             possible_start_interval = audio_length - self.sequence_length
             if self.reproducable_load_sequences:
-                step_begin = int(hashlib.sha256(audio_path.encode("utf-8")).hexdigest(), 16) % possible_start_interval
+                step_begin = int(hashlib.sha256(audio_paths.encode("utf-8")).hexdigest(), 16) % possible_start_interval
             else:
                 step_begin = self.random.randint(possible_start_interval)
             step_begin //= HOP_LENGTH
@@ -121,7 +123,7 @@ class PianoRollAudioDataset(Dataset):
             num_frames = end - begin
 
             if audio is None:
-                audio = load_audio(audio_path, frame_offset=begin, num_frames=num_frames, normalize=False).to(
+                audio = load_audio(audio_paths, frame_offset=begin, num_frames=num_frames, normalize=False).to(
                     self.device
                 )
             else:
@@ -130,7 +132,7 @@ class PianoRollAudioDataset(Dataset):
             velocity = labels.velocity[step_begin:step_end, :].to(self.device)
         else:
             if audio is None:
-                audio = load_audio(audio_path, normalize=False).to(self.device)
+                audio = load_audio(audio_paths, normalize=False).to(self.device)
             else:
                 audio = audio.to(self.device)
             label = labels.label.to(self.device)
@@ -142,7 +144,7 @@ class PianoRollAudioDataset(Dataset):
         velocity = velocity.float().div_(128.0)
 
         return AudioAndLabels(
-            path=labels.path,
+            paths=labels.paths,
             audio=audio,
             annotation=MusicAnnotation(onset=onset, offset=offset, frame=frame, velocity=velocity),
         )
@@ -161,13 +163,13 @@ class PianoRollAudioDataset(Dataset):
         """return the list of input files (audio_filename, tsv_filename) for this group"""
         raise NotImplementedError
 
-    def load_labels(self, audio_path: str, tsv_path: str) -> Labels:
+    def load_labels(self, audio_paths: List[str], tsv_path: str) -> Labels:
 
         saved_data_path = tsv_path.replace(".tsv", ".pt")
         if os.path.exists(saved_data_path):
             label_dict = torch.load(saved_data_path)
         else:
-            audio_length = torchaudio.info(audio_path).num_frames
+            audio_length = torchaudio.info(audio_paths[0]).num_frames
 
             n_keys = MAX_MIDI - MIN_MIDI + 1
             n_steps = (audio_length - 1) // HOP_LENGTH + 1
@@ -206,9 +208,9 @@ class PianoRollAudioDataset(Dataset):
                         velocity[left:frame_right, f] = vel
                 else:
                     raise RuntimeError(f"Unsupported tsv shape {midi.shape}")
-            label_dict = dict(path=audio_path, label=label, velocity=velocity)
+            label_dict = dict(path=audio_paths, label=label, velocity=velocity)
             torch.save(label_dict, saved_data_path)
-        return Labels(path=audio_path, label=label_dict["label"], velocity=label_dict["velocity"])
+        return Labels(paths=audio_paths, label=label_dict["label"], velocity=label_dict["velocity"])
 
 
 class SlakhAmtDataset(PianoRollAudioDataset):
@@ -280,9 +282,9 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                 continue
 
             if self.audio == "individual":
-                raise NotImplementedError()
+                audio_paths = [os.path.join(track_folder, "stems", stem + ".flac") for stem in relevant_stems]
             else:
-                audio_path = os.path.join(track_folder, "mix.flac")
+                audio_paths = [os.path.join(track_folder, "mix.flac")]
 
             tsv_filename = os.path.join(track_folder, "-".join(relevant_stems) + ".tsv")
             if not os.path.exists(tsv_filename):
@@ -290,5 +292,5 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                 np.savetxt(
                     tsv_filename, midi, fmt="%.6f", delimiter="\t", header="instrument\tonset\toffset\tnote\tvelocity"
                 )
-            result.append((audio_path, tsv_filename))
+            result.append((audio_paths, tsv_filename))
         return result
