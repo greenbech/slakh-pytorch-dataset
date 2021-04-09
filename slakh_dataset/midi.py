@@ -11,7 +11,7 @@ class MidiData(NamedTuple):
     contain_pitch_bend: bool
 
 
-def parse_midis(paths: List[str]) -> MidiData:
+def parse_midis(paths: List[str], max_midi=MAX_MIDI, min_midi=MIN_MIDI) -> MidiData:
     """open midi files and list of (instrument, onset, offset, note, velocity) rows"""
     data = []
     contain_pitch_bend = False
@@ -24,7 +24,7 @@ def parse_midis(paths: List[str]) -> MidiData:
                 contain_pitch_bend = True
 
             for note in instrument.notes:
-                if int(note.pitch) in range(MIN_MIDI, MAX_MIDI + 1):
+                if int(note.pitch) in range(min_midi, max_midi + 1):
                     data.append(
                         (
                             instrument.program,
@@ -38,7 +38,7 @@ def parse_midis(paths: List[str]) -> MidiData:
                     notes_out_of_range.add(int(note.pitch))
         if len(notes_out_of_range) > 0:
             print(
-                f"{len(notes_out_of_range)} notes out of MIDI range ({MIN_MIDI},{MAX_MIDI}) for file {path}. Excluded pitches: {notes_out_of_range}"
+                f"{len(notes_out_of_range)} notes out of MIDI range ({min_midi},{max_midi}) for file {path}. Excluded pitches: {notes_out_of_range}"
             )
 
     data.sort(key=lambda x: x[1])

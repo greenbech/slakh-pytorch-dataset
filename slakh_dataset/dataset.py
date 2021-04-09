@@ -62,6 +62,8 @@ class PianoRollAudioDataset(Dataset):
         path,
         instrument: str,
         groups=None,
+        min_midi=MIN_MIDI,
+        max_midi=MAX_MIDI,
         sequence_length=None,
         seed=42,
         device=DEFAULT_DEVICE,
@@ -75,6 +77,8 @@ class PianoRollAudioDataset(Dataset):
         self.device = device
         self.random = np.random.RandomState(seed)
         self.instrument = instrument
+        self.min_midi = min_midi
+        self.max_midi = max_midi
 
         self.file_list = []
         for group in groups:
@@ -171,7 +175,7 @@ class PianoRollAudioDataset(Dataset):
         else:
             audio_length = torchaudio.info(audio_paths[0]).num_frames
 
-            n_keys = MAX_MIDI - MIN_MIDI + 1
+            n_keys = self.max_midi - self.min_midi + 1
             n_steps = (audio_length - 1) // HOP_LENGTH + 1
 
             label = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
@@ -188,7 +192,7 @@ class PianoRollAudioDataset(Dataset):
                         frame_right = min(n_steps, frame_right)
                         offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
 
-                        f = int(note) - MIN_MIDI
+                        f = int(note) - self.min_midi
                         label[left:onset_right, f] = 3
                         label[onset_right:frame_right, f] = 2
                         label[frame_right:offset_right, f] = 1
@@ -221,6 +225,8 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         audio: str,
         instrument: str,
         groups=None,
+        min_midi=MIN_MIDI,
+        max_midi=MAX_MIDI,
         sequence_length=None,
         skip_pitch_bend_tracks=False,
         seed=42,
@@ -236,12 +242,14 @@ class SlakhAmtDataset(PianoRollAudioDataset):
             path,
             instrument,
             groups if groups is not None else ["train"],
-            sequence_length,
-            seed,
-            device,
-            num_files,
-            max_files_in_memory,
-            reproducable_load_sequences,
+            min_midi=min_midi,
+            max_midi=max_midi,
+            sequence_length=sequence_length,
+            seed=seed,
+            device=device,
+            num_files=num_files,
+            max_files_in_memory=max_files_in_memory,
+            reproducable_load_sequences=reproducable_load_sequences,
         )
 
     @classmethod
