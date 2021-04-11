@@ -116,7 +116,7 @@ class PianoRollAudioDataset(Dataset):
             audio_length = torchaudio.info(audio_paths[0]).num_frames
             possible_start_interval = audio_length - self.sequence_length
             if self.reproducable_load_sequences:
-                step_begin = int(hashlib.sha256(audio_paths.encode("utf-8")).hexdigest(), 16) % possible_start_interval
+                step_begin = int(hashlib.sha256("".join(audio_paths).encode("utf-8")).hexdigest(), 16) % possible_start_interval
             else:
                 step_begin = self.random.randint(possible_start_interval)
             step_begin //= HOP_LENGTH
@@ -267,8 +267,12 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         else:
             midi_programs = instrument_to_midi_programs(self.instrument)
 
+        if self.skip_pitch_bend_track:
+            with open(os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"pitch_bend_info.json"), "r") as f:
+                pitch_bend_info = json.load(f)
+
         result = []
-        for track in tqdm(split_tracks[group], desc=f"Loading groups {self.groups}"):
+        for track in tqdm(split_tracks[group], desc=f"Processing groups {self.groups}"):
             glob_path = os.path.join(self.path, "**", track)
             track_folder_list = sorted(glob(glob_path))
             assert len(track_folder_list) == 1, (glob_path, track_folder_list)
@@ -298,18 +302,22 @@ class SlakhAmtDataset(PianoRollAudioDataset):
             else:
                 audio_paths = [os.path.join(track_folder, "mix.flac")]
 
-            tsv_filename = os.path.join(track_folder, "-".join(relevant_stems) + ".tsv")
-            midi_data = parse_midis(midi_paths)
-            if self.skip_pitch_bend_track and midi_data.contain_pitch_bend:
+            if self.skip_pitch_bend_track and any((pitch_bend_info[track][stem]['pitch_bend'] for stem in relevant_stems)):
                 continue
-            np.savetxt(
-                tsv_filename,
-                midi_data.data,
-                fmt="%.6f",
-                delimiter="\t",
-                header="instrument\tonset\toffset\tnote\tvelocity",
-            )
+
+            tsv_filename = os.path.join(track_folder, "-".join(relevant_stems) + ".tsv")
+            if not os.path.exists(tsv_filename):
+                midi_data = parse_midis(midi_paths)
+                if self.skip_pitch_bend_track and midi_data.contain_pitch_bend:
+                    continue
+                np.savetxt(
+                    tsv_filename,
+                    midi_data.data,
+                    fmt="%.6f",
+                    delimiter="\t",
+                    header="instrument\tonset\toffset\tnote\tvelocity",
+                    )
             result.append((audio_paths, tsv_filename))
 
-        print(f"Kept {len(result)} files for groups {self.groups}")
+        print(f"Kept {len(result)} tracks for groups {self.groups}")
         return result
