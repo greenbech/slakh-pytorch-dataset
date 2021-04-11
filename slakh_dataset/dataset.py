@@ -116,7 +116,9 @@ class PianoRollAudioDataset(Dataset):
             audio_length = torchaudio.info(audio_paths[0]).num_frames
             possible_start_interval = audio_length - self.sequence_length
             if self.reproducable_load_sequences:
-                step_begin = int(hashlib.sha256("".join(audio_paths).encode("utf-8")).hexdigest(), 16) % possible_start_interval
+                step_begin = (
+                    int(hashlib.sha256("".join(audio_paths).encode("utf-8")).hexdigest(), 16) % possible_start_interval
+                )
             else:
                 step_begin = self.random.randint(possible_start_interval)
             step_begin //= HOP_LENGTH
@@ -268,7 +270,9 @@ class SlakhAmtDataset(PianoRollAudioDataset):
             midi_programs = instrument_to_midi_programs(self.instrument)
 
         if self.skip_pitch_bend_track:
-            with open(os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"pitch_bend_info.json"), "r") as f:
+            with open(
+                os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"pitch_bend_info.json"), "r"
+            ) as f:
                 pitch_bend_info = json.load(f)
 
         result = []
@@ -302,7 +306,9 @@ class SlakhAmtDataset(PianoRollAudioDataset):
             else:
                 audio_paths = [os.path.join(track_folder, "mix.flac")]
 
-            if self.skip_pitch_bend_track and any((pitch_bend_info[track][stem]['pitch_bend'] for stem in relevant_stems)):
+            if self.skip_pitch_bend_track and any(
+                (pitch_bend_info[track][stem]["pitch_bend"] for stem in relevant_stems)
+            ):
                 continue
 
             tsv_filename = os.path.join(track_folder, "-".join(relevant_stems) + ".tsv")
@@ -316,7 +322,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                     fmt="%.6f",
                     delimiter="\t",
                     header="instrument\tonset\toffset\tnote\tvelocity",
-                    )
+                )
             result.append((audio_paths, tsv_filename))
 
         print(f"Kept {len(result)} tracks for groups {self.groups}")
