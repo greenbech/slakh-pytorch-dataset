@@ -152,7 +152,7 @@ class PianoRollAudioDataset(Dataset):
         frame = (label > 1).float()
         velocity = velocity.float().div_(128.0)
 
-        track = audio_paths[0].split(os.sep)[-2]
+        track = audio_paths[0].split(os.sep)[-3]
         return AudioAndLabels(
             track=track,
             audio=audio,
