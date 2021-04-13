@@ -14,6 +14,7 @@ def test_amt_dataset_redux_individual_in_memory():
         sequence_length=32000,
         skip_pitch_bend_tracks=True,
         max_files_in_memory=-1,
+        num_files=24,
     )
 
     loader = DataLoader(dataset, batch_size=8, shuffle=True, drop_last=True)
@@ -37,6 +38,7 @@ def test_amt_dataset_splits_v2_mix_streaming():
         sequence_length=32000,
         max_files_in_memory=0,
         skip_pitch_bend_tracks=True,
+        num_files=24,
     )
 
     loader = DataLoader(dataset, batch_size=8, shuffle=True, drop_last=True)

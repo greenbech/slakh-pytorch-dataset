@@ -2,6 +2,8 @@
 
 Unofficial PyTorch dataset for [Slakh](http://www.slakh.com/).
 
+This project is a work in progress, expect breaking changes!
+
 ## Roadmap
 
 ### Automatic music transcription (AMT) usecase with audio and labels
