@@ -1,5 +1,5 @@
-from tqdm import tqdm
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from slakh_dataset import SlakhAmtDataset
 
@@ -46,7 +46,6 @@ def test_amt_dataset_splits_v2_mix_streaming():
         pass
 
 
-
 def main():
     print("test_amt_dataset_redux_individual_in_memory()")
     test_amt_dataset_redux_individual_in_memory()
@@ -55,6 +54,7 @@ def main():
     print("test_amt_dataset_splits_v2_mix_streaming()")
     test_amt_dataset_splits_v2_mix_streaming()
     print()
+
 
 if __name__ == "__main__":
     main()
