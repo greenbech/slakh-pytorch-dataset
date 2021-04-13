@@ -90,7 +90,7 @@ class PianoRollAudioDataset(Dataset):
                 self.file_list.append(file)
         self.labels = [None] * len(self.file_list)
 
-        self.max_files_in_memory = max_files_in_memory
+        self.max_files_in_memory = len(self.file_list) if max_files_in_memory < 0 else max_files_in_memory
         if self.max_files_in_memory > 0:
             self.audios = [None] * self.max_files_in_memory
         self.reproducable_load_sequences = reproducable_load_sequences
@@ -151,8 +151,9 @@ class PianoRollAudioDataset(Dataset):
         frame = (label > 1).float()
         velocity = velocity.float().div_(128.0)
 
+        track = audio_paths[0].split(os.sep)[-2]
         return AudioAndLabels(
-            paths=labels.paths,
+            track=track,
             audio=audio,
             annotation=MusicAnnotation(onset=onset, offset=offset, frame=frame, velocity=velocity),
         )
