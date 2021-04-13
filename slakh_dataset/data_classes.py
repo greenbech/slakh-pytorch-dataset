@@ -15,6 +15,6 @@ class MusicAnnotation(NamedTuple):
 class AudioAndLabels(NamedTuple):
     """Audio and label class with data that will be on GPU"""
 
-    paths: List[str]
+    track: str
     audio: torch.FloatTensor  # [num_steps, n_mels]
     annotation: MusicAnnotation
