@@ -88,7 +88,7 @@ class PianoRollAudioDataset(Dataset):
                 if num_files is not None and len(self.file_list) > num_files:
                     break
                 self.file_list.append(file)
-        self.file_list.sort(key=lambda x: len(x[0]), reverse=True)
+        self.file_list.sort(key=lambda x: len(x[1]), reverse=True)
         self.labels = [None] * len(self.file_list)
 
         self.max_files_in_memory = len(self.file_list) if max_files_in_memory < 0 else max_files_in_memory
@@ -97,7 +97,7 @@ class PianoRollAudioDataset(Dataset):
         self.reproducable_load_sequences = reproducable_load_sequences
 
     def __getitem__(self, index) -> AudioAndLabels:
-        audio_paths, tsv_path = self.file_list[index]
+        track, audio_paths, tsv_path = self.file_list[index]
         audio = None
         if index < self.max_files_in_memory:
             audio = self.audios[index]
@@ -152,7 +152,6 @@ class PianoRollAudioDataset(Dataset):
         frame = (label > 1).float()
         velocity = velocity.float().div_(128.0)
 
-        track = audio_paths[0].split(os.sep)[-3]
         return AudioAndLabels(
             track=track,
             audio=audio,
@@ -325,7 +324,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                     delimiter="\t",
                     header="instrument\tonset\toffset\tnote\tvelocity",
                 )
-            result.append((audio_paths, tsv_filename))
+            result.append((track, audio_paths, tsv_filename))
 
         print(f"Kept {len(result)} tracks for groups {self.groups}")
         return result

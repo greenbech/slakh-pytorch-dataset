@@ -1,8 +1,10 @@
 [tool.poetry]
 name = "slakh-dataset"
-version = "0.1.5"
+version = "0.1.6"
 description = "Unofficial PyTorch dataset for Slakh"
 authors = ["Henrik Grønbech <henrikgronbech@gmail.com>"]
+license = "MIT"
+readme = "README.md"
 
 [tool.black]
 line-length = 120

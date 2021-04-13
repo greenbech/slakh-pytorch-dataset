@@ -35,17 +35,23 @@ def test_amt_dataset_redux_individual_in_memory():
 
 
 def test_amt_dataset_splits_v2_mix_streaming():
+    sequence_length = 32000
     dataset = SlakhAmtDataset(
         path="data/slakh2100_flac_16k",
         split="splits_v2",
         audio="mix",
         instrument="electric-bass",
         groups=["test"],
-        sequence_length=32000,
+        sequence_length=sequence_length,
         max_files_in_memory=0,
         skip_pitch_bend_tracks=True,
         num_files=24,
     )
+
+    audio_and_label = dataset[0]
+    assert audio_and_label.track.startswith("Track")
+    assert len(audio_and_label.audio.shape) == 1
+    assert audio_and_label.audio.shape[0] == sequence_length
 
     loader = DataLoader(dataset, batch_size=8, shuffle=True, drop_last=True)
     for batch in tqdm(loader):
