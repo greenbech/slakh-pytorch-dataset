@@ -88,11 +88,12 @@ class PianoRollAudioDataset(Dataset):
                 if num_files is not None and len(self.file_list) > num_files:
                     break
                 self.file_list.append(file)
+        self.file_list.sort(key=lambda x: len(x[0]), reverse=True)
         self.labels = [None] * len(self.file_list)
 
         self.max_files_in_memory = len(self.file_list) if max_files_in_memory < 0 else max_files_in_memory
         if self.max_files_in_memory > 0:
-            self.audios = [None] * self.max_files_in_memory
+            self.audios = [None] * min(len(self.file_list), self.max_files_in_memory)
         self.reproducable_load_sequences = reproducable_load_sequences
 
     def __getitem__(self, index) -> AudioAndLabels:
