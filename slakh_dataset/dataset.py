@@ -85,7 +85,7 @@ class PianoRollAudioDataset(Dataset):
         self.file_list = []
         for group in groups:
             for file in self.files(group):
-                if num_files is not None and len(self.file_list) > num_files:
+                if num_files is not None and len(self.file_list) >= num_files:
                     break
                 self.file_list.append(file)
         self.file_list.sort(key=lambda x: len(x[1]), reverse=True)
@@ -174,7 +174,7 @@ class PianoRollAudioDataset(Dataset):
 
     def load_labels(self, audio_paths: List[str], tsv_path: str) -> Labels:
 
-        saved_data_path = tsv_path.replace(".tsv", ".pt")
+        saved_data_path = tsv_path.replace(".tsv", f"-{self.min_midi}-{self.max_midi}.pt")
         if os.path.exists(saved_data_path):
             label_dict = torch.load(saved_data_path)
         else:
@@ -189,8 +189,11 @@ class PianoRollAudioDataset(Dataset):
             midi = np.loadtxt(tsv_path, delimiter="\t", skiprows=1)
 
             if midi.size != 0:
-                if midi.shape[1] == 4:
-                    for onset, offset, note, vel in midi:
+                if midi.shape[1] == 5:
+                    for instrument, onset, offset, note, vel in midi:
+                        if not (self.min_midi <= note <= self.max_midi):
+                            print(f"Skipping note {note} out of range ({self.min_midi}, {self.max_midi})")
+                            continue
                         left = int(round(onset * SAMPLE_RATE / HOP_LENGTH))
                         onset_right = min(n_steps, left + HOPS_IN_ONSET)
                         frame_right = int(round(offset * SAMPLE_RATE / HOP_LENGTH))
@@ -198,19 +201,6 @@ class PianoRollAudioDataset(Dataset):
                         offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
 
                         f = int(note) - self.min_midi
-                        label[left:onset_right, f] = 3
-                        label[onset_right:frame_right, f] = 2
-                        label[frame_right:offset_right, f] = 1
-                        velocity[left:frame_right, f] = vel
-                elif midi.shape[1] == 5:
-                    for instrument, onset, offset, note, vel in midi:
-                        left = int(round(onset * SAMPLE_RATE / HOP_LENGTH))
-                        onset_right = min(n_steps, left + HOPS_IN_ONSET)
-                        frame_right = int(round(offset * SAMPLE_RATE / HOP_LENGTH))
-                        frame_right = min(n_steps, frame_right)
-                        offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
-
-                        f = int(note) - MIN_MIDI
                         label[left:onset_right, f] = 3
                         label[onset_right:frame_right, f] = 2
                         label[frame_right:offset_right, f] = 1
