@@ -35,14 +35,14 @@ def test_amt_dataset_redux_individual_in_memory():
         pass
 
 
-def test_amt_dataset_splits_v2_mix_streaming():
+def test_amt_dataset_original_mix_streaming():
     sequence_length = 32000
-    min_midi = 40
-    max_midi = 70
+    min_midi = 47
+    max_midi = 91
     num_files = 10
     dataset = SlakhAmtDataset(
         path="data/slakh2100_flac_16k",
-        split="splits_v2",
+        split="original",
         audio="mix",
         instrument="electric-bass",
         groups=["test"],
@@ -77,8 +77,8 @@ def main():
     test_amt_dataset_redux_individual_in_memory()
     print()
 
-    print("test_amt_dataset_splits_v2_mix_streaming()")
-    test_amt_dataset_splits_v2_mix_streaming()
+    print("test_amt_dataset_original_mix_streaming()")
+    test_amt_dataset_original_mix_streaming()
     print()
 
 

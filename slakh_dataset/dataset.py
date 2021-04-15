@@ -1,10 +1,11 @@
+from collections import defaultdict
 import hashlib
 import json
 import os
 import pathlib
 from abc import abstractmethod
 from glob import glob
-from typing import List, NamedTuple
+from typing import Dict, List, NamedTuple
 
 import numpy as np
 import torch
@@ -173,7 +174,6 @@ class PianoRollAudioDataset(Dataset):
         raise NotImplementedError
 
     def load_labels(self, audio_paths: List[str], tsv_path: str) -> Labels:
-
         saved_data_path = tsv_path.replace(".tsv", f"-{self.min_midi}-{self.max_midi}.pt")
         if os.path.exists(saved_data_path):
             label_dict = torch.load(saved_data_path)
@@ -192,7 +192,7 @@ class PianoRollAudioDataset(Dataset):
                 if midi.shape[1] == 5:
                     for instrument, onset, offset, note, vel in midi:
                         if not (self.min_midi <= note <= self.max_midi):
-                            print(f"Skipping note {note} out of range ({self.min_midi}, {self.max_midi})")
+                            # print(f"Skipping note {note} out of range ({self.min_midi}, {self.max_midi})")
                             continue
                         left = int(round(onset * SAMPLE_RATE / HOP_LENGTH))
                         onset_right = min(n_steps, left + HOPS_IN_ONSET)
@@ -211,6 +211,20 @@ class PianoRollAudioDataset(Dataset):
             torch.save(label_dict, saved_data_path)
         return Labels(paths=audio_paths, label=label_dict["label"], velocity=label_dict["velocity"])
 
+    def get_midi_notes_stats(self) -> Dict[int, int]:
+        notes_states = defaultdict(int)
+        for _, _, tsv_path in tqdm(self.file_list, desc="Loading midi notes stats"):
+            midi = np.loadtxt(tsv_path, delimiter="\t", skiprows=1)
+
+            if midi.size != 0:
+                if midi.shape[1] == 5:
+                    for _, _, _, note, _ in midi:
+                        notes_states[int(note)] += 1
+
+        result_dict = {}
+        for key in sorted(notes_states.keys()):
+            result_dict[key] = notes_states[key]
+        return result_dict
 
 class SlakhAmtDataset(PianoRollAudioDataset):
     def __init__(
