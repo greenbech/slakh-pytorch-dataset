@@ -286,10 +286,10 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         for track in tqdm(split_tracks[group], desc=f"Processing groups {self.groups}"):
             glob_path = os.path.join(self.path, "**", track)
             track_folder_list = sorted(glob(glob_path))
-            if self.skip_missing_tracks and len(track_folder_list) == 0:
-                print(f"Skipping track {track}")
-            else:
-                if len(track_folder_list) == 1:
+            if len(track_folder_list) != 1:
+                if self.skip_missing_tracks:
+                    print(f"Skipping track {track}")
+                else:
                     raise RuntimeError(f"Missing track {track}")
             track_folder = track_folder_list[0]
 
