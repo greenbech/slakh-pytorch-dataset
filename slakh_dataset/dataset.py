@@ -243,10 +243,12 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         num_files=None,
         max_files_in_memory=-1,
         reproducable_load_sequences=False,
+        skip_missing_tracks=False,
     ):
         self.split = split
         self.audio = audio
         self.skip_pitch_bend_track = skip_pitch_bend_tracks
+        self.skip_missing_tracks = skip_missing_tracks
         super().__init__(
             path,
             instrument,
@@ -284,7 +286,11 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         for track in tqdm(split_tracks[group], desc=f"Processing groups {self.groups}"):
             glob_path = os.path.join(self.path, "**", track)
             track_folder_list = sorted(glob(glob_path))
-            assert len(track_folder_list) == 1, (glob_path, track_folder_list)
+            if self.skip_missing_tracks and len(track_folder_list) == 0:
+                print(f"Skipping track {track}")
+            else:
+                if len(track_folder_list) == 1:
+                    raise RuntimeError(f"Missing track {track}")
             track_folder = track_folder_list[0]
 
             yaml_path = os.path.join(track_folder, "metadata.yaml")
@@ -309,7 +315,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
             if self.audio == "individual":
                 audio_paths = [os.path.join(track_folder, "stems", stem + ".flac") for stem in relevant_stems]
             else:
-                audio_paths = [os.path.join(track_folder, "mix.flac")]
+                audio_paths = [os.path.join(track_folder, f) for f in self.audio.split(",")]
 
             if self.skip_pitch_bend_track and any(
                 (pitch_bend_info[track][stem]["pitch_bend"] for stem in relevant_stems)

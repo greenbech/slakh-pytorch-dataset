@@ -44,7 +44,7 @@ from slakh_dataset import SlakhAmtDataset
 dataset = SlakhAmtDataset(
     path='path/to/slakh-16khz-folder'
     split='redux', # 'splits_v2','redux-no-pitch-bend'
-    audio='mix', # 'mix'
+    audio='mix.flac', # 'individual'
     instrument='electric-bass', # or `midi_programs`
     # midi_programs=[33, 34, 35, 36, 37],
     groups=['train'],

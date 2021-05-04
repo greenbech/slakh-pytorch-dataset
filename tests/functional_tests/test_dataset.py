@@ -43,7 +43,7 @@ def test_amt_dataset_original_mix_streaming():
     dataset = SlakhAmtDataset(
         path="data/slakh2100_flac_16k",
         split="original",
-        audio="mix",
+        audio="mix.flac",
         instrument="electric-bass",
         groups=["test"],
         min_midi=min_midi,
