@@ -23,8 +23,7 @@ def test_amt_dataset_redux_individual_in_memory():
     assert len(audio_and_label.audio.shape) == 1
     assert len(dataset) == 24
     assert audio_and_label.audio.shape[0] == sequence_length
-    assert audio_and_label.end_frame - audio_and_label.start_frame > 0
-    assert audio_and_label.frames_per_second == 31.25
+    assert audio_and_label.end_time - audio_and_label.start_time > 0
 
     loader = DataLoader(dataset, batch_size=8, shuffle=True, drop_last=True)
     for batch in tqdm(loader):
@@ -64,7 +63,7 @@ def test_amt_dataset_original_mix_streaming():
     assert audio_and_label.annotation.onset.shape[1] == max_midi - min_midi + 1
     assert audio_and_label.annotation.offset.shape[1] == max_midi - min_midi + 1
     assert audio_and_label.annotation.frame.shape[1] == max_midi - min_midi + 1
-    assert audio_and_label.end_frame - audio_and_label.start_frame > 0
+    assert audio_and_label.end_time - audio_and_label.start_time > 0
     onset_len = audio_and_label.annotation.onset.shape[0]
     offset_len = audio_and_label.annotation.offset.shape[0]
     frame_len = audio_and_label.annotation.frame.shape[0]

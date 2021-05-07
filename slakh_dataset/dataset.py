@@ -163,9 +163,8 @@ class PianoRollAudioDataset(Dataset):
 
         return AudioAndLabels(
             track=track,
-            start_frame=start_frame,
-            end_frame=end_frame,
-            frames_per_second=SAMPLE_RATE/HOP_LENGTH,
+            start_time=start_frame/SAMPLE_RATE,
+            end_time=end_frame/SAMPLE_RATE,
             audio=audio,
             annotation=MusicAnnotation(onset=onset, offset=offset, frame=frame, velocity=velocity),
         )

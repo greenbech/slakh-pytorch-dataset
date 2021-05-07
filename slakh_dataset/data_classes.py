@@ -16,8 +16,7 @@ class AudioAndLabels(NamedTuple):
     """Audio and label class with data that will be on GPU"""
 
     track: str
-    start_frame: int
-    end_frame: int
-    frames_per_second: float
+    start_time: float
+    end_time: float
     audio: torch.FloatTensor  # [num_steps, n_mels]
     annotation: MusicAnnotation
