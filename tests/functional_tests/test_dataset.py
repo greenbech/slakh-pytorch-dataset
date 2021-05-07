@@ -16,6 +16,7 @@ def test_amt_dataset_redux_individual_in_memory():
         skip_pitch_bend_tracks=True,
         max_files_in_memory=-1,
         num_files=24,
+        max_harmony=2,
     )
 
     audio_and_label = dataset[0]

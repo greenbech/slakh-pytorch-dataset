@@ -40,9 +40,9 @@ class Labels(NamedTuple):
 def instrument_to_midi_programs(instrument: str) -> List[int]:
     avaliable_instruments = ["electric-bass", "bass", "all"]
     if instrument == "electric-bass":
-        return list(range(33, 37))
+        return list(range(33, 38))
     if instrument == "bass":
-        return list(range(32, 37))
+        return list(range(32, 40))
     if instrument == "all":
         return list(range(0, 112))
     raise RuntimeError(f"Unsupported instrument {instrument}. Avaliable instruments: {avaliable_instruments}")
@@ -73,6 +73,7 @@ class PianoRollAudioDataset(Dataset):
         num_files=None,
         max_files_in_memory=-1,
         reproducable_load_sequences=False,
+        max_harmony=None,
     ):
         self.path = path
         self.groups = groups if groups is not None else self.available_groups()
@@ -82,6 +83,8 @@ class PianoRollAudioDataset(Dataset):
         self.instrument = instrument
         self.min_midi = min_midi
         self.max_midi = max_midi
+        self.num_files = num_files
+        self.max_harmony = max_harmony
 
         self.file_list = []
         for group in groups:
@@ -254,6 +257,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         max_files_in_memory=-1,
         reproducable_load_sequences=False,
         skip_missing_tracks=False,
+        max_harmony=None,
     ):
         self.split = split
         self.audio = audio
@@ -271,6 +275,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
             num_files=num_files,
             max_files_in_memory=max_files_in_memory,
             reproducable_load_sequences=reproducable_load_sequences,
+            max_harmony=max_harmony,
         )
 
     @classmethod
@@ -345,7 +350,17 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                     delimiter="\t",
                     header="instrument\tonset\toffset\tnote\tvelocity",
                 )
+
+            if self.max_harmony is not None:
+                label = self.load_labels(audio_paths, tsv_filename)
+                max_harmony = torch.max(torch.sum((label.label == 3) + (label.label == 2), axis=1))
+                if max_harmony > self.max_harmony:
+                    print(f"Skipping track {track} due to max harmony {max_harmony}")
+                    continue
+
             result.append((track, audio_paths, tsv_filename))
+            if self.num_files is not None and len(result) >= self.num_files:
+                break
 
         print(f"Kept {len(result)} tracks for groups {self.groups}")
         return result
