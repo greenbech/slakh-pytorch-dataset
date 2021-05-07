@@ -332,10 +332,15 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                 continue
 
             if track in problem_stems:
+                continue_again = False
                 for stem in relevant_stems:
                     if stem in problem_stems[track]:
                         print(f"Skipping track {track} because stem {stem} is {problem_stems[track][stem]}")
+                        continue_again = True
                         continue
+                if continue_again:
+                    continue
+
 
             if self.audio == "individual":
                 audio_paths = [os.path.join(track_folder, "stems", stem + ".flac") for stem in relevant_stems]
