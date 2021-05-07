@@ -283,13 +283,16 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         return ["train", "validation", "test"]
 
     def files(self, group):
-        with open(os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"{self.split}.json"), "r") as f:
-            split_tracks = json.load(f)
-
         if self.instrument == "drums":
             raise NotImplementedError()
         else:
             midi_programs = instrument_to_midi_programs(self.instrument)
+
+        with open(os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"{self.split}.json"), "r") as f:
+            split_tracks = json.load(f)
+
+        with open(os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"problem_stems.json"), "r") as f:
+            problem_stems = json.load(f)
 
         if self.skip_pitch_bend_track:
             with open(
@@ -327,6 +330,12 @@ class SlakhAmtDataset(PianoRollAudioDataset):
             relevant_stems.sort()
             if len(relevant_stems) == 0:
                 continue
+
+            if track in problem_stems:
+                for stem in relevant_stems:
+                    if stem in problem_stems[track]:
+                        print(f"Skipping track {track} because stem {stem} is {problem_stems[track][stem]}")
+                        continue
 
             if self.audio == "individual":
                 audio_paths = [os.path.join(track_folder, "stems", stem + ".flac") for stem in relevant_stems]
