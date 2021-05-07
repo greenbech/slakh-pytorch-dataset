@@ -114,8 +114,10 @@ class PianoRollAudioDataset(Dataset):
             labels = self.load_labels(audio_paths, tsv_path)
             self.labels[index] = labels
 
+        audio_length = torchaudio.info(audio_paths[0]).num_frames
+        start_frame = None
+        end_frame = None
         if self.sequence_length is not None:
-            audio_length = torchaudio.info(audio_paths[0]).num_frames
             possible_start_interval = audio_length - self.sequence_length
             if self.reproducable_load_sequences:
                 step_begin = (
@@ -140,6 +142,9 @@ class PianoRollAudioDataset(Dataset):
                 audio = audio[begin:end].to(self.device)
             label = labels.label[step_begin:step_end, :].to(self.device)
             velocity = labels.velocity[step_begin:step_end, :].to(self.device)
+
+            start_frame = begin
+            end_frame  = end
         else:
             if audio is None:
                 audio = load_audio(audio_paths, normalize=False).to(self.device)
@@ -148,6 +153,9 @@ class PianoRollAudioDataset(Dataset):
             label = labels.label.to(self.device)
             velocity = labels.velocity.to(self.device).float()
 
+            start_frame = 0
+            end_frame = audio_length
+
         onset = (label == 3).float()
         offset = (label == 1).float()
         frame = (label > 1).float()
@@ -155,6 +163,9 @@ class PianoRollAudioDataset(Dataset):
 
         return AudioAndLabels(
             track=track,
+            start_frame=start_frame,
+            end_frame=end_frame,
+            frames_per_second=SAMPLE_RATE/HOP_LENGTH,
             audio=audio,
             annotation=MusicAnnotation(onset=onset, offset=offset, frame=frame, velocity=velocity),
         )
@@ -289,6 +300,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
             if len(track_folder_list) != 1:
                 if self.skip_missing_tracks:
                     print(f"Skipping track {track}")
+                    continue
                 else:
                     raise RuntimeError(f"Missing track {track}")
             track_folder = track_folder_list[0]
