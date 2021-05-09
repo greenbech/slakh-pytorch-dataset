@@ -1,4 +1,7 @@
 {
+    "Track00262": {
+        "S01": "wrong-midi"
+    },
     "Track00357": {
         "S03": "no-audio"
     },
@@ -16,6 +19,30 @@
     },
     "Track00404": {
         "S03": "short-notes"
+    },
+    "Track00496": {
+        "S01": "wrong-pitch"
+    },
+    "Track00629": {
+        "S01": "no-audio"
+    },
+    "Track00633": {
+        "S01": "no-audio"
+    },
+    "Track00737": {
+        "S01": "short-notes"
+    },
+    "Track00749": {
+        "S01": "no-audio"
+    },
+    "Track00893": {
+        "S01": "short-notes"
+    },
+    "Track01629": {
+        "S00": "no-audio"
+    },
+    "Track01918": {
+        "S10": "wrong-pitch"
     },
     "Track01931": {
         "S01": "wrong-pitch"

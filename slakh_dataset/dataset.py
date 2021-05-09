@@ -24,7 +24,7 @@ from .constants import (
     SAMPLE_RATE,
 )
 from .data_classes import AudioAndLabels, MusicAnnotation
-from .midi import parse_midis
+from .midi import parse_midis, instrument_to_midi_programs
 
 
 class Labels(NamedTuple):
@@ -35,17 +35,6 @@ class Labels(NamedTuple):
     label: torch.ByteTensor  # [num_steps, midi_bins]
     # a matrix that contains MIDI velocity values at the frame locations
     velocity: torch.ByteTensor  # [num_steps, midi_bins]
-
-
-def instrument_to_midi_programs(instrument: str) -> List[int]:
-    avaliable_instruments = ["electric-bass", "bass", "all"]
-    if instrument == "electric-bass":
-        return list(range(33, 38))
-    if instrument == "bass":
-        return list(range(32, 40))
-    if instrument == "all":
-        return list(range(0, 112))
-    raise RuntimeError(f"Unsupported instrument {instrument}. Avaliable instruments: {avaliable_instruments}")
 
 
 def load_audio(paths: List[str], frame_offset: int = 0, num_frames: int = -1, normalize: bool = False) -> torch.Tensor:
@@ -63,7 +52,8 @@ class PianoRollAudioDataset(Dataset):
     def __init__(
         self,
         path,
-        instrument: str,
+        instrument: str = None,
+        midi_programs=None,
         groups=None,
         min_midi=MIN_MIDI,
         max_midi=MAX_MIDI,
@@ -81,6 +71,7 @@ class PianoRollAudioDataset(Dataset):
         self.device = device
         self.random = np.random.RandomState(seed)
         self.instrument = instrument
+        self.midi_programs = midi_programs
         self.min_midi = min_midi
         self.max_midi = max_midi
         self.num_files = num_files
@@ -245,7 +236,8 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         path: str,
         split: str,
         audio: str,
-        instrument: str,
+        instrument: str = None,
+        midi_programs=None,
         groups=None,
         min_midi=MIN_MIDI,
         max_midi=MAX_MIDI,
@@ -265,8 +257,9 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         self.skip_missing_tracks = skip_missing_tracks
         super().__init__(
             path,
-            instrument,
-            groups if groups is not None else ["train"],
+            instrument=instrument,
+            groups=groups if groups is not None else ["train"],
+            midi_programs=midi_programs,
             min_midi=min_midi,
             max_midi=max_midi,
             sequence_length=sequence_length,
@@ -283,10 +276,13 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         return ["train", "validation", "test"]
 
     def files(self, group):
-        if self.instrument == "drums":
-            raise NotImplementedError()
+        if self.midi_programs:
+            midi_programs = self.midi_programs
         else:
-            midi_programs = instrument_to_midi_programs(self.instrument)
+            if self.instrument == "drums":
+                raise NotImplementedError()
+            else:
+                midi_programs = instrument_to_midi_programs(self.instrument)
 
         with open(os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"{self.split}.json"), "r") as f:
             split_tracks = json.load(f)
@@ -301,7 +297,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                 pitch_bend_info = json.load(f)
 
         result = []
-        for track in tqdm(split_tracks[group], desc=f"Processing groups {self.groups}"):
+        for track in tqdm(split_tracks[group], desc=f"Processing group {group}"):
             glob_path = os.path.join(self.path, "**", track)
             track_folder_list = sorted(glob(glob_path))
             if len(track_folder_list) != 1:
@@ -335,7 +331,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                 continue_again = False
                 for stem in relevant_stems:
                     if stem in problem_stems[track]:
-                        print(f"Skipping track {track} because stem {stem} is {problem_stems[track][stem]}")
+                        print(f"Skipping track {track} because stem {stem} has error '{problem_stems[track][stem]}'")
                         continue_again = True
                         continue
                 if continue_again:
