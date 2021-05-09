@@ -39,8 +39,8 @@ def test_amt_dataset_redux_individual_in_memory():
 
 def test_amt_dataset_original_mix_streaming():
     sequence_length = 32000
-    min_midi = 47
-    max_midi = 91
+    min_midi = 35
+    max_midi = 79
     num_files = 10
     dataset = SlakhAmtDataset(
         path="data/slakh2100_flac_16k",

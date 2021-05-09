@@ -190,7 +190,7 @@ class PianoRollAudioDataset(Dataset):
             label = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
             velocity = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
 
-            midi = np.loadtxt(tsv_path, delimiter="\t", skiprows=1)
+            midi = np.atleast_2d(np.loadtxt(tsv_path, delimiter="\t", skiprows=1))
 
             if midi.size != 0:
                 if midi.shape[1] == 5:
@@ -218,7 +218,7 @@ class PianoRollAudioDataset(Dataset):
     def get_midi_notes_stats(self) -> Dict[int, int]:
         notes_states = defaultdict(int)
         for _, _, tsv_path in tqdm(self.file_list, desc="Loading midi notes stats"):
-            midi = np.loadtxt(tsv_path, delimiter="\t", skiprows=1)
+            midi = np.atleast_2d(np.loadtxt(tsv_path, delimiter="\t", skiprows=1))
 
             if midi.size != 0:
                 if midi.shape[1] == 5:
@@ -372,5 +372,5 @@ class SlakhAmtDataset(PianoRollAudioDataset):
             if self.num_files is not None and len(result) >= self.num_files:
                 break
 
-        print(f"Kept {len(result)} tracks for groups {self.groups}")
+        print(f"Kept {len(result)} tracks for group {group}")
         return result
