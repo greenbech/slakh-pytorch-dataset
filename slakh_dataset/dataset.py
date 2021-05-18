@@ -308,13 +308,23 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                     raise RuntimeError(f"Missing track {track}")
             track_folder = track_folder_list[0]
 
-            yaml_path = os.path.join(track_folder, "metadata.yaml")
-            with open(yaml_path, "r") as f:
-                yaml_data = yaml.safe_load(f)
+            json_path = os.path.join(track_folder, "metadata.json")
+            is_json = os.path.exists(json_path)
+            if is_json:
+                with open(json_path, 'r') as f:
+                    track_metadata = json.load(f)
+            else: 
+                yaml_path = os.path.join(track_folder, "metadata.yaml")
+                with open(yaml_path, "r") as f:
+                    track_metadata = yaml.safe_load(f)
+
+                with open(json_path, "w") as f:
+                    json.dump(track_metadata, f, indent=2)
+                    f.write("\n")
 
             relevant_stems = []
             midi_paths = []
-            for stem, value in yaml_data["stems"].items():
+            for stem, value in track_metadata["stems"].items():
                 if (
                     value["program_num"] in midi_programs
                     and value["audio_rendered"]
