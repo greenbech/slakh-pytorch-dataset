@@ -10,6 +10,7 @@ class MidiData(NamedTuple):
 
 def instrument_to_midi_programs(instrument: str) -> List[int]:
     instrument_to_midi_dict = {
+        "drum": [128],
         "piano": range(8),
         "chromatic-percussion": range(8, 16),
         "organ": range(16, 24),
@@ -37,6 +38,7 @@ def instrument_to_midi_programs(instrument: str) -> List[int]:
 
 def instrument_to_canonical_midi_program(instrument: str) -> List[int]:
     instrument_to_midi_dict = {
+        "drum": 128,
         "piano": 0,
         "chromatic-percussion": 8,
         "organ": 16,
@@ -74,7 +76,7 @@ def parse_midis(paths: List[str]) -> MidiData:
         for instrument in mid.instruments:
             if any((abs(pitch_bend_to_semitones(p.pitch)) >= 0.5 for p in instrument.pitch_bends)):
                 contain_pitch_bend = True
-
+            instrument_program = 128 if instrument.is_drum else instrument.program
             for note in instrument.notes:
                 if instrument.program in bass_program_numbers:
                     # https://github.com/ethman/slakh-generation/issues/2
@@ -83,7 +85,7 @@ def parse_midis(paths: List[str]) -> MidiData:
                     note.pitch -= 12
                 data.append(
                     (
-                        instrument.program,
+                        instrument_program,
                         note.start,
                         note.end,
                         int(note.pitch),

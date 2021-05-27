@@ -313,12 +313,9 @@ class SlakhAmtDataset(PianoRollAudioDataset):
             relevant_stems = []
             midi_paths = []
             for stem, value in track_metadata["stems"].items():
-                if (
-                    value["program_num"] in midi_programs
-                    and value["audio_rendered"]
-                    and value["midi_saved"]
-                    and not value["is_drum"]
-                ):
+                if not (value["audio_rendered"] and value["midi_saved"]):
+                    continue
+                if (-1 in midi_programs and value["is_drum"]) or value["program_num"] in midi_programs:
                     relevant_stems.append(stem)
                     midi_paths.append(os.path.join(track_folder, "MIDI", stem + ".mid"))
             relevant_stems.sort()
