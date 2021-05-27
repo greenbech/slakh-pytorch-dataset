@@ -3,19 +3,19 @@
         "S01": "wrong-midi"
     },
     "Track00357": {
-        "S03": "no-audio"
+        "S03": "white-noise"
     },
     "Track00377": {
-        "S07": "no-audio"
+        "S07": "white-noise"
     },
     "Track00385": {
-        "S00": "no-audio"
+        "S00": "white-noise"
     },
     "Track00398": {
-        "S00": "no-audio"
+        "S00": "white-noise"
     },
     "Track00400": {
-        "S00": "no-audio"
+        "S00": "white-noise"
     },
     "Track00404": {
         "S03": "short-notes"
@@ -24,30 +24,45 @@
         "S01": "wrong-pitch"
     },
     "Track00629": {
-        "S01": "no-audio"
+        "S01": "white-noise"
     },
     "Track00633": {
-        "S01": "no-audio"
+        "S01": "white-noise"
     },
     "Track00737": {
         "S01": "short-notes"
     },
     "Track00749": {
-        "S01": "no-audio"
+        "S01": "white-noise"
     },
     "Track00893": {
         "S01": "short-notes"
     },
     "Track01629": {
-        "S00": "no-audio"
+        "S00": "white-noise"
+    },
+    "Track01876": {
+        "S01": "missing-audio"
+    },
+    "Track01908": {
+        "S05": "missing-audio"
     },
     "Track01918": {
         "S10": "wrong-pitch"
     },
+    "Track01929": {
+        "S04": "wrong-octave"
+    },
     "Track01931": {
         "S01": "wrong-pitch"
     },
+    "Track01993": {
+        "S01": "missing-audio"
+    },
     "Track01937": {
         "S03": "wrong-pitch"
+    },
+    "Track02024": {
+        "S13": "missing-audio"
     }
 }
