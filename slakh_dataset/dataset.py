@@ -5,7 +5,7 @@ import os
 import pathlib
 from abc import abstractmethod
 from glob import glob
-from typing import Dict, List, NamedTuple
+from typing import Dict, Iterable, List, NamedTuple, Optional, Tuple
 
 import numpy as np
 import torch
@@ -52,8 +52,8 @@ class PianoRollAudioDataset(Dataset):
     def __init__(
         self,
         path,
-        instrument: str = None,
-        midi_programs=None,
+        label_instruments: Optional[List[str]] = None,
+        label_midi_programs: Optional[List[Iterable[int]]] = None,
         groups=None,
         min_midi=MIN_MIDI,
         max_midi=MAX_MIDI,
@@ -70,12 +70,13 @@ class PianoRollAudioDataset(Dataset):
         self.sequence_length = sequence_length
         self.device = device
         self.random = np.random.RandomState(seed)
-        self.instrument = instrument
-        self.midi_programs = midi_programs
+        self.label_instruments = label_instruments
+        self.label_midi_programs = label_midi_programs
         self.min_midi = min_midi
         self.max_midi = max_midi
         self.num_files = num_files
         self.max_harmony = max_harmony
+        self.reproducable_load_sequences = reproducable_load_sequences
 
         self.file_list = []
         for group in groups:
@@ -89,7 +90,6 @@ class PianoRollAudioDataset(Dataset):
         self.max_files_in_memory = len(self.file_list) if max_files_in_memory < 0 else max_files_in_memory
         if self.max_files_in_memory > 0:
             self.audios = [None] * min(len(self.file_list), self.max_files_in_memory)
-        self.reproducable_load_sequences = reproducable_load_sequences
 
     def __getitem__(self, index) -> AudioAndLabels:
         track, audio_paths, tsv_path = self.file_list[index]
@@ -177,43 +177,49 @@ class PianoRollAudioDataset(Dataset):
         """return the list of input files (audio_filename, tsv_filename) for this group"""
         raise NotImplementedError
 
-    def load_labels(self, audio_paths: List[str], tsv_path: str) -> Labels:
-        saved_data_path = tsv_path.replace(".tsv", f"-{self.min_midi}-{self.max_midi}.pt")
-        if os.path.exists(saved_data_path):
-            label_dict = torch.load(saved_data_path)
-        else:
-            audio_length = torchaudio.info(audio_paths[0]).num_frames
+    def load_labels(self, audio_paths: List[str], tsv_paths: List[str]) -> Labels:
+        n_keys = self.max_midi - self.min_midi + 1
+        audio_length = torchaudio.info(audio_paths[0]).num_frames
+        n_steps = (audio_length - 1) // HOP_LENGTH + 1
+        label = torch.zeros(n_steps, n_keys, len(tsv_paths), dtype=torch.uint8)
+        velocity = torch.zeros(n_steps, n_keys, len(tsv_paths), dtype=torch.uint8)
 
-            n_keys = self.max_midi - self.min_midi + 1
-            n_steps = (audio_length - 1) // HOP_LENGTH + 1
+        for i, tsv_path in enumerate(tsv_paths):
+            saved_data_path = tsv_path.replace(".tsv", f"-{self.min_midi}-{self.max_midi}.pt")
+            if os.path.exists(saved_data_path):
+                label_dict = torch.load(saved_data_path)
+            else:
+                midi = np.atleast_2d(np.loadtxt(tsv_path, delimiter="\t", skiprows=1))
+                
+                single_label = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
+                single_velocity = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
+                if midi.size != 0:
+                    if midi.shape[1] == 5:
+                        for instrument, onset, offset, note, vel in midi:
+                            if not (self.min_midi <= note <= self.max_midi):
+                                # print(f"Skipping note {note} out of range ({self.min_midi}, {self.max_midi})")
+                                continue
+                            left = int(round(onset * SAMPLE_RATE / HOP_LENGTH))
+                            onset_right = min(n_steps, left + HOPS_IN_ONSET)
+                            frame_right = int(round(offset * SAMPLE_RATE / HOP_LENGTH))
+                            frame_right = min(n_steps, frame_right)
+                            offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
 
-            label = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
-            velocity = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
-
-            midi = np.atleast_2d(np.loadtxt(tsv_path, delimiter="\t", skiprows=1))
-
-            if midi.size != 0:
-                if midi.shape[1] == 5:
-                    for instrument, onset, offset, note, vel in midi:
-                        if not (self.min_midi <= note <= self.max_midi):
-                            # print(f"Skipping note {note} out of range ({self.min_midi}, {self.max_midi})")
-                            continue
-                        left = int(round(onset * SAMPLE_RATE / HOP_LENGTH))
-                        onset_right = min(n_steps, left + HOPS_IN_ONSET)
-                        frame_right = int(round(offset * SAMPLE_RATE / HOP_LENGTH))
-                        frame_right = min(n_steps, frame_right)
-                        offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
-
-                        f = int(note) - self.min_midi
-                        label[left:onset_right, f] = 3
-                        label[onset_right:frame_right, f] = 2
-                        label[frame_right:offset_right, f] = 1
-                        velocity[left:frame_right, f] = vel
-                else:
-                    raise RuntimeError(f"Unsupported tsv shape {midi.shape}")
-            label_dict = dict(path=audio_paths, label=label, velocity=velocity)
-            torch.save(label_dict, saved_data_path)
-        return Labels(paths=audio_paths, label=label_dict["label"], velocity=label_dict["velocity"])
+                            f = int(note) - self.min_midi
+                            single_label[left:onset_right, f] = 3
+                            single_label[onset_right:frame_right, f] = 2
+                            single_label[frame_right:offset_right, f] = 1
+                            single_velocity[left:frame_right, f] = vel
+                    else:
+                        raise RuntimeError(f"Unsupported tsv shape {midi.shape}")
+                label_dict = dict(path=audio_paths, label=single_label, velocity=single_velocity)
+                torch.save(label_dict, saved_data_path)
+            label[:, :, i] = label_dict["label"]
+            velocity[:, :, i] = label_dict["label"]
+        if (self.label_instruments and isinstance(self.label_instruments, str)) or (self.label_midi_programs and isinstance(self.label_midi_programs[0], int)):
+            label.squeeze_(len(label.shape) - 1)
+            velocity.squeeze_(len(velocity.shape) - 1)
+        return Labels(paths=audio_paths, label=label, velocity=velocity)
 
     def get_midi_notes_stats(self) -> Dict[int, int]:
         notes_states = defaultdict(int)
@@ -236,8 +242,8 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         path: str,
         split: str,
         audio: str,
-        instrument: str = None,
-        midi_programs=None,
+        label_instruments: Optional[List[str]] = None,
+        label_midi_programs: Optional[List[Iterable[int]]] = None,
         groups=None,
         min_midi=MIN_MIDI,
         max_midi=MAX_MIDI,
@@ -257,9 +263,9 @@ class SlakhAmtDataset(PianoRollAudioDataset):
         self.skip_missing_tracks = skip_missing_tracks
         super().__init__(
             path,
-            instrument=instrument,
+            label_instruments=label_instruments,
             groups=groups if groups is not None else ["train"],
-            midi_programs=midi_programs,
+            label_midi_programs=label_midi_programs,
             min_midi=min_midi,
             max_midi=max_midi,
             sequence_length=sequence_length,
@@ -275,35 +281,17 @@ class SlakhAmtDataset(PianoRollAudioDataset):
     def available_groups(cls):
         return ["train", "validation", "test"]
 
-    def files(self, group):
-        if self.midi_programs:
-            midi_programs = self.midi_programs
-        else:
-            if self.instrument == "drums":
-                raise NotImplementedError()
-            else:
-                midi_programs = instrument_to_midi_programs(self.instrument)
 
-        with open(os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"{self.split}.json"), "r") as f:
-            split_tracks = json.load(f)
-
-        with open(os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"problem_stems.json"), "r") as f:
-            problem_stems = json.load(f)
-
-        if self.skip_pitch_bend_track:
-            with open(
-                os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"pitch_bend_info.json"), "r"
-            ) as f:
-                pitch_bend_info = json.load(f)
-
-        result = []
-        for track in tqdm(split_tracks[group], desc=f"Processing group {group}"):
+    def _load_track(self, track, label_midi_programs, problem_stems, pitch_bend_info) -> Optional[Tuple[List[str], List[str]]]:
+        tsv_paths = []
+        all_relevant_stems = set()
+        for midi_programs in label_midi_programs:
             glob_path = os.path.join(self.path, "**", track)
             track_folder_list = sorted(glob(glob_path))
             if len(track_folder_list) != 1:
                 if self.skip_missing_tracks:
                     print(f"Skipping track {track}")
-                    continue
+                    return
                 else:
                     raise RuntimeError(f"Missing track {track}")
             track_folder = track_folder_list[0]
@@ -335,34 +323,24 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                     midi_paths.append(os.path.join(track_folder, "MIDI", stem + ".mid"))
             relevant_stems.sort()
             if len(relevant_stems) == 0:
-                continue
+                return
 
             if track in problem_stems:
-                continue_again = False
                 for stem in relevant_stems:
                     if stem in problem_stems[track]:
                         print(f"Skipping track {track} because stem {stem} has error '{problem_stems[track][stem]}'")
-                        continue_again = True
-                        continue
-                if continue_again:
-                    continue
-
-
-            if self.audio == "individual":
-                audio_paths = [os.path.join(track_folder, "stems", stem + ".flac") for stem in relevant_stems]
-            else:
-                audio_paths = [os.path.join(track_folder, f) for f in self.audio.split(",")]
+                        return
 
             if self.skip_pitch_bend_track and any(
                 (pitch_bend_info[track][stem]["pitch_bend"] for stem in relevant_stems)
             ):
-                continue
+                return
 
             tsv_filename = os.path.join(track_folder, "-".join(relevant_stems) + ".tsv")
             if not os.path.exists(tsv_filename):
                 midi_data = parse_midis(midi_paths)
                 if self.skip_pitch_bend_track and midi_data.contain_pitch_bend:
-                    continue
+                    return
                 np.savetxt(
                     tsv_filename,
                     midi_data.data,
@@ -370,17 +348,62 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                     delimiter="\t",
                     header="instrument\tonset\toffset\tnote\tvelocity",
                 )
+            tsv_paths.append(tsv_filename)
 
             if self.max_harmony is not None:
-                label = self.load_labels(audio_paths, tsv_filename)
+                label = self.load_labels([os.path.join(track_folder, "mix.flac")], [tsv_filename])
                 max_harmony = torch.max(torch.sum((label.label == 3) + (label.label == 2), axis=1))
                 if max_harmony > self.max_harmony:
                     print(f"Skipping track {track} due to max harmony {max_harmony}")
-                    continue
+                    return
 
-            result.append((track, audio_paths, tsv_filename))
-            if self.num_files is not None and len(result) >= self.num_files:
+            for stem in relevant_stems:
+                all_relevant_stems.add(stem)
+
+        if self.audio == "individual":
+            audio_paths = [os.path.join(track_folder, "stems", stem + ".flac") for stem in all_relevant_stems]
+        else:
+            audio_paths = [os.path.join(track_folder, f) for f in self.audio.split(",")]
+
+        return audio_paths, tsv_paths
+
+
+
+    def files(self, group):
+        if self.label_midi_programs is None and self.label_instruments is None:
+            raise RuntimeError("Both `label_midi_programs` and `label_instruments` cannot be None")
+        if self.label_instruments is not None:
+            if isinstance(self.label_instruments, str):
+                label_midi_programs = [instrument_to_midi_programs(self.label_instruments)]
+            else:
+                label_midi_programs = [instrument_to_midi_programs(inst) for inst in self.label_instruments]
+        else:
+            if isinstance(self.label_midi_programs[0], Iterable):
+                label_midi_programs = self.label_midi_programs
+            else:
+                label_midi_programs = [self.label_midi_programs]
+        with open(os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"{self.split}.json"), "r") as f:
+            split_tracks = json.load(f)
+
+        with open(os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"problem_stems.json"), "r") as f:
+            problem_stems = json.load(f)
+
+        pitch_bend_info = None
+        if self.skip_pitch_bend_track:
+            with open(
+                os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"pitch_bend_info.json"), "r"
+            ) as f:
+                pitch_bend_info = json.load(f)
+
+        results = []
+        for track in tqdm(split_tracks[group], desc=f"Processing group {group}"):
+            result = self._load_track(track, label_midi_programs, problem_stems, pitch_bend_info)
+            if result is None:
+                continue
+            audio_paths, tsv_paths = result
+            results.append((track, audio_paths, tsv_paths))
+            if self.num_files is not None and len(results) >= self.num_files:
                 break
 
-        print(f"Kept {len(result)} tracks for group {group}")
-        return result
+        print(f"Kept {len(results)} tracks for group {group}")
+        return results
