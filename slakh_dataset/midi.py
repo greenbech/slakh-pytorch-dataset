@@ -76,22 +76,33 @@ def parse_midis(paths: List[str]) -> MidiData:
         for instrument in mid.instruments:
             if any((abs(pitch_bend_to_semitones(p.pitch)) >= 0.5 for p in instrument.pitch_bends)):
                 contain_pitch_bend = True
-            instrument_program = 128 if instrument.is_drum else instrument.program
             for note in instrument.notes:
                 if instrument.program in bass_program_numbers:
                     # https://github.com/ethman/slakh-generation/issues/2
                     if note.pitch > 67:
                         continue
                     note.pitch -= 12
-                data.append(
-                    (
-                        instrument_program,
-                        note.start,
-                        note.end,
-                        int(note.pitch),
-                        int(note.velocity),
+
+                if instrument.is_drum:
+                    data.append(
+                        (
+                            128,
+                            note.start,
+                            note.start + 0.001,
+                            int(note.pitch),
+                            int(note.velocity),
+                        )
                     )
-                )
+                else:
+                    data.append(
+                        (
+                            instrument.program,
+                            note.start,
+                            note.end,
+                            int(note.pitch),
+                            int(note.velocity),
+                        )
+                    )
 
     data.sort(key=lambda x: x[1])
     return MidiData(data=data, contain_pitch_bend=contain_pitch_bend)

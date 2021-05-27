@@ -181,8 +181,8 @@ class PianoRollAudioDataset(Dataset):
         n_keys = self.max_midi - self.min_midi + 1
         audio_length = torchaudio.info(audio_paths[0]).num_frames
         n_steps = (audio_length - 1) // HOP_LENGTH + 1
-        label = torch.zeros(n_steps, n_keys, len(tsv_paths), dtype=torch.uint8)
-        velocity = torch.zeros(n_steps, n_keys, len(tsv_paths), dtype=torch.uint8)
+        multi_label = torch.zeros(n_steps, n_keys, len(tsv_paths), dtype=torch.uint8)
+        multi_velocity = torch.zeros(n_steps, n_keys, len(tsv_paths), dtype=torch.uint8)
 
         for i, tsv_path in enumerate(tsv_paths):
             saved_data_path = tsv_path.replace(".tsv", f"-{self.min_midi}-{self.max_midi}.pt")
@@ -191,8 +191,8 @@ class PianoRollAudioDataset(Dataset):
             else:
                 midi = np.atleast_2d(np.loadtxt(tsv_path, delimiter="\t", skiprows=1))
                 
-                single_label = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
-                single_velocity = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
+                label = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
+                velocity = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
                 if midi.size != 0:
                     if midi.shape[1] == 5:
                         for instrument, onset, offset, note, vel in midi:
@@ -202,24 +202,24 @@ class PianoRollAudioDataset(Dataset):
                             left = int(round(onset * SAMPLE_RATE / HOP_LENGTH))
                             onset_right = min(n_steps, left + HOPS_IN_ONSET)
                             frame_right = int(round(offset * SAMPLE_RATE / HOP_LENGTH))
-                            frame_right = min(n_steps, frame_right)
+                            frame_right = min(n_steps, max(frame_right, onset_right))
                             offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
 
                             f = int(note) - self.min_midi
-                            single_label[left:onset_right, f] = 3
-                            single_label[onset_right:frame_right, f] = 2
-                            single_label[frame_right:offset_right, f] = 1
-                            single_velocity[left:frame_right, f] = vel
+                            label[left:onset_right, f] = 3
+                            label[onset_right:frame_right, f][label[onset_right:frame_right, f] == 0] = 2
+                            label[frame_right:offset_right, f][label[frame_right:offset_right, f] != 3] = 1
+                            velocity[left:frame_right, f] = vel
                     else:
                         raise RuntimeError(f"Unsupported tsv shape {midi.shape}")
-                label_dict = dict(path=audio_paths, label=single_label, velocity=single_velocity)
+                label_dict = dict(path=audio_paths, label=label, velocity=velocity)
                 torch.save(label_dict, saved_data_path)
-            label[:, :, i] = label_dict["label"]
-            velocity[:, :, i] = label_dict["label"]
+            multi_label[:, :, i] = label_dict["label"]
+            multi_velocity[:, :, i] = label_dict["label"]
         if (self.label_instruments and isinstance(self.label_instruments, str)) or (self.label_midi_programs and isinstance(self.label_midi_programs[0], int)):
-            label.squeeze_(len(label.shape) - 1)
-            velocity.squeeze_(len(velocity.shape) - 1)
-        return Labels(paths=audio_paths, label=label, velocity=velocity)
+            multi_label.squeeze_(len(multi_label.shape) - 1)
+            multi_velocity.squeeze_(len(multi_velocity.shape) - 1)
+        return Labels(paths=audio_paths, label=multi_label, velocity=multi_velocity)
 
     def get_midi_notes_stats(self) -> Dict[int, int]:
         notes_states = defaultdict(int)
