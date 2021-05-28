@@ -31,7 +31,7 @@ class Labels(NamedTuple):
     # paths to audio files (must be equal length)
     paths: List[str]
     # a matrix that contains the onset/offset/frame labels encoded as:
-    # 3 = onset, 2 = frames after onset, 1 = offset, 0 = all else
+    # 4 = onset, 3 = frames after onset, 2 = frame and offset combined, 1 = offset, 0 = all else
     label: torch.ByteTensor  # [num_steps, midi_bins]
     # a matrix that contains MIDI velocity values at the frame locations
     velocity: torch.ByteTensor  # [num_steps, midi_bins]
@@ -150,9 +150,9 @@ class PianoRollAudioDataset(Dataset):
             start_frame = 0
             end_frame = audio_length
 
-        onset = (label == 3).float()
-        offset = (label == 1).float()
+        onset = (label == 4).float()
         frame = (label > 1).float()
+        offset = ((label == 1) + (label == 2)).float()
         velocity = velocity.float().div_(128.0)
 
         return AudioAndLabels(
@@ -206,9 +206,12 @@ class PianoRollAudioDataset(Dataset):
                             offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
 
                             f = int(note) - self.min_midi
-                            label[left:onset_right, f] = 3
-                            # label[onset_right:frame_right, f] = 2
-                            label[frame_right:offset_right, f] = 1
+                            # on
+                            label[left:onset_right, f] = 4
+                            label[onset_right:frame_right, f][label[onset_right:frame_right, f] == 0] = 3
+                            label[onset_right:frame_right, f][label[onset_right:frame_right, f] == 1] = 2
+                            label[frame_right:offset_right, f][label[frame_right:offset_right, f] == 0] = 1
+                            label[frame_right:offset_right, f][label[frame_right:offset_right, f] == 3] = 2
                             velocity[left:frame_right, f] = vel
                     else:
                         raise RuntimeError(f"Unsupported tsv shape {midi.shape}")
