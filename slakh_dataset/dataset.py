@@ -207,15 +207,15 @@ class PianoRollAudioDataset(Dataset):
 
                             f = int(note) - self.min_midi
                             label[left:onset_right, f] = 3
-                            label[onset_right:frame_right, f][label[onset_right:frame_right, f] == 0] = 2
-                            label[frame_right:offset_right, f][label[frame_right:offset_right, f] != 3] = 1
+                            # label[onset_right:frame_right, f] = 2
+                            label[frame_right:offset_right, f] = 1
                             velocity[left:frame_right, f] = vel
                     else:
                         raise RuntimeError(f"Unsupported tsv shape {midi.shape}")
                 label_dict = dict(path=audio_paths, label=label, velocity=velocity)
                 torch.save(label_dict, saved_data_path)
             multi_label[:, :, i] = label_dict["label"]
-            multi_velocity[:, :, i] = label_dict["label"]
+            multi_velocity[:, :, i] = label_dict["velocity"]
         if (self.label_instruments and isinstance(self.label_instruments, str)) or (self.label_midi_programs and isinstance(self.label_midi_programs[0], int)):
             multi_label.squeeze_(len(multi_label.shape) - 1)
             multi_velocity.squeeze_(len(multi_velocity.shape) - 1)
