@@ -226,13 +226,13 @@ class PianoRollAudioDataset(Dataset):
 
     def get_midi_notes_stats(self) -> Dict[int, int]:
         notes_states = defaultdict(int)
-        for _, _, tsv_path in tqdm(self.file_list, desc="Loading midi notes stats"):
-            midi = np.atleast_2d(np.loadtxt(tsv_path, delimiter="\t", skiprows=1))
-
-            if midi.size != 0:
-                if midi.shape[1] == 5:
-                    for _, _, _, note, _ in midi:
-                        notes_states[int(note)] += 1
+        for _, _, tsv_paths in tqdm(self.file_list, desc="Loading midi notes stats"):
+            for tsv_path in tsv_paths:
+                midi = np.atleast_2d(np.loadtxt(tsv_path, delimiter="\t", skiprows=1))
+                if midi.size != 0:
+                    if midi.shape[1] == 5:
+                        for _, _, _, note, _ in midi:
+                            notes_states[int(note)] += 1
 
         result_dict = {}
         for key in sorted(notes_states.keys()):
