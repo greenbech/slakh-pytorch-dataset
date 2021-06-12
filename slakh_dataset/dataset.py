@@ -24,7 +24,7 @@ from .constants import (
     SAMPLE_RATE,
 )
 from .data_classes import AudioAndLabels, MusicAnnotation
-from .midi import parse_midis, instrument_to_midi_programs
+from .midi import parse_midis, instrument_to_midi_programs, instrument_to_canonical_midi_program, midi_program_to_pitch_range
 
 
 class Labels(NamedTuple):
@@ -47,6 +47,45 @@ def load_audio(paths: List[str], frame_offset: int = 0, num_frames: int = -1, no
         raise RuntimeError(f"Unsupported tensor shape f{audio.shape} of type f{audio.dtype}")
     return audio
 
+
+def parse_label_info(label_instruments, label_midi_programs):
+    if label_midi_programs is None and label_instruments is None:
+        raise RuntimeError("Both `label_midi_programs` and `label_instruments` cannot be None")
+    if label_instruments is not None:
+        if isinstance(label_instruments, str):
+            label_midi_programs = [instrument_to_midi_programs(label_instruments)]
+        else:
+            label_midi_programs = [instrument_to_midi_programs(inst) for inst in label_instruments]
+    else:
+        if isinstance(label_midi_programs[0], Iterable):
+            label_midi_programs = label_midi_programs
+        else:
+            label_midi_programs = [label_midi_programs]
+
+    label_info = []
+    for i, midi_programs in enumerate(label_midi_programs):
+        if label_instruments is not None:
+            cannonical_midi = instrument_to_canonical_midi_program(label_instruments[i])
+        else:
+            cannonical_midi = midi_programs[0]
+
+        ranges = [midi_program_to_pitch_range(mp) for mp in midi_programs]
+        min_range = min([x[0] for x in ranges])
+        max_range = max([x[1] for x in ranges])
+        label_info.append({
+            "range": (min_range, max_range),
+            "midi_programs": midi_programs,
+            "cannonical_midi": cannonical_midi
+        })
+    return label_info
+
+
+def label_info_to_cummulative_pos(label_info):
+    sizes = [l["range"][1] - l["range"][0] + 1 for l in label_info]
+    cummulative_pos = [0]
+    for size in sizes:
+        cummulative_pos.append(cummulative_pos[-1] + size)
+    return cummulative_pos
 
 class PianoRollAudioDataset(Dataset):
     def __init__(
@@ -72,6 +111,7 @@ class PianoRollAudioDataset(Dataset):
         self.random = np.random.RandomState(seed)
         self.label_instruments = label_instruments
         self.label_midi_programs = label_midi_programs
+        self.label_info = parse_label_info(label_instruments, label_midi_programs)
         self.min_midi = min_midi
         self.max_midi = max_midi
         self.num_files = num_files
@@ -178,17 +218,22 @@ class PianoRollAudioDataset(Dataset):
         raise NotImplementedError
 
     def load_labels(self, audio_paths: List[str], tsv_paths: List[str]) -> Labels:
-        n_keys = self.max_midi - self.min_midi + 1
         audio_length = torchaudio.info(audio_paths[0]).num_frames
         n_steps = (audio_length - 1) // HOP_LENGTH + 1
-        multi_label = torch.zeros(n_steps, n_keys, len(tsv_paths), dtype=torch.uint8)
-        multi_velocity = torch.zeros(n_steps, n_keys, len(tsv_paths), dtype=torch.uint8)
+
+        cummulative_pos = label_info_to_cummulative_pos(self.label_info)
+        size = cummulative_pos[-1]
+
+        multi_label = torch.zeros(n_steps, size, dtype=torch.uint8)
+        multi_velocity = torch.zeros(n_steps, size, dtype=torch.uint8)
 
         for i, tsv_path in enumerate(tsv_paths):
-            saved_data_path = tsv_path.replace(".tsv", f"-{self.min_midi}-{self.max_midi}.pt")
+            min_midi, max_midi = self.label_info[i]["range"]
+            saved_data_path = tsv_path.replace(".tsv", f"-{min_midi}-{max_midi}.pt")
             if os.path.exists(saved_data_path):
                 label_dict = torch.load(saved_data_path)
             else:
+                n_keys = max_midi - min_midi + 1
                 midi = np.atleast_2d(np.loadtxt(tsv_path, delimiter="\t", skiprows=1))
                 
                 label = torch.zeros(n_steps, n_keys, dtype=torch.uint8)
@@ -196,8 +241,8 @@ class PianoRollAudioDataset(Dataset):
                 if midi.size != 0:
                     if midi.shape[1] == 5:
                         for instrument, onset, offset, note, vel in midi:
-                            if not (self.min_midi <= note <= self.max_midi):
-                                # print(f"Skipping note {note} out of range ({self.min_midi}, {self.max_midi})")
+                            if not (min_midi <= note <= max_midi):
+                                # print(f"Skipping note {note} out of range ({min_midi}, {max_midi})")
                                 continue
                             left = int(round(onset * SAMPLE_RATE / HOP_LENGTH))
                             onset_right = min(n_steps, left + HOPS_IN_ONSET)
@@ -205,7 +250,7 @@ class PianoRollAudioDataset(Dataset):
                             frame_right = min(n_steps, max(frame_right, onset_right))
                             offset_right = min(n_steps, frame_right + HOPS_IN_OFFSET)
 
-                            f = int(note) - self.min_midi
+                            f = int(note) - min_midi
                             # on
                             label[left:onset_right, f] = 4
                             label[onset_right:frame_right, f][label[onset_right:frame_right, f] == 0] = 3
@@ -217,11 +262,9 @@ class PianoRollAudioDataset(Dataset):
                         raise RuntimeError(f"Unsupported tsv shape {midi.shape}")
                 label_dict = dict(path=audio_paths, label=label, velocity=velocity)
                 torch.save(label_dict, saved_data_path)
-            multi_label[:, :, i] = label_dict["label"]
-            multi_velocity[:, :, i] = label_dict["velocity"]
-        if (self.label_instruments and isinstance(self.label_instruments, str)) or (self.label_midi_programs and isinstance(self.label_midi_programs[0], int)):
-            multi_label.squeeze_(len(multi_label.shape) - 1)
-            multi_velocity.squeeze_(len(multi_velocity.shape) - 1)
+            multi_label[:, cummulative_pos[i]:cummulative_pos[i+1]] = label_dict["label"]
+            multi_velocity[:, cummulative_pos[i]:cummulative_pos[i+1]] = label_dict["velocity"]
+
         return Labels(paths=audio_paths, label=multi_label, velocity=multi_velocity)
 
     def get_midi_notes_stats(self) -> Dict[int, int]:
@@ -288,57 +331,64 @@ class SlakhAmtDataset(PianoRollAudioDataset):
     def _load_track(self, track, label_midi_programs, problem_stems, pitch_bend_info) -> Optional[Tuple[List[str], List[str]]]:
         tsv_paths = []
         all_relevant_stems = set()
+        glob_path = os.path.join(self.path, "**", track)
+        track_folder_list = sorted(glob(glob_path))
+        if len(track_folder_list) != 1:
+            if self.skip_missing_tracks:
+                print(f"Skipping track {track}")
+                return
+            else:
+                raise RuntimeError(f"Missing track {track}")
+        track_folder = track_folder_list[0]
+
+        json_path = os.path.join(track_folder, "metadata.json")
+        is_json = os.path.exists(json_path)
+        if is_json:
+            with open(json_path, 'r') as f:
+                track_metadata = json.load(f)
+        else: 
+            yaml_path = os.path.join(track_folder, "metadata.yaml")
+            with open(yaml_path, "r") as f:
+                track_metadata = yaml.safe_load(f)
+
+            with open(json_path, "w") as f:
+                json.dump(track_metadata, f, indent=2)
+                f.write("\n")
+
         for midi_programs in label_midi_programs:
-            glob_path = os.path.join(self.path, "**", track)
-            track_folder_list = sorted(glob(glob_path))
-            if len(track_folder_list) != 1:
-                if self.skip_missing_tracks:
-                    print(f"Skipping track {track}")
-                    return
-                else:
-                    raise RuntimeError(f"Missing track {track}")
-            track_folder = track_folder_list[0]
-
-            json_path = os.path.join(track_folder, "metadata.json")
-            is_json = os.path.exists(json_path)
-            if is_json:
-                with open(json_path, 'r') as f:
-                    track_metadata = json.load(f)
-            else: 
-                yaml_path = os.path.join(track_folder, "metadata.yaml")
-                with open(yaml_path, "r") as f:
-                    track_metadata = yaml.safe_load(f)
-
-                with open(json_path, "w") as f:
-                    json.dump(track_metadata, f, indent=2)
-                    f.write("\n")
-
-            relevant_stems = []
             midi_paths = []
-            for stem, value in track_metadata["stems"].items():
-                if not (value["audio_rendered"] and value["midi_saved"]):
-                    continue
-                if (-1 in midi_programs and value["is_drum"]) or value["program_num"] in midi_programs:
-                    relevant_stems.append(stem)
-                    midi_paths.append(os.path.join(track_folder, "MIDI", stem + ".mid"))
-            relevant_stems.sort()
-            if len(relevant_stems) == 0:
-                return
+            relevant_stems = []
+            only_parse_rythm = False
+            if midi_programs == [-1]: # rythm track
+                tsv_filename = os.path.join(track_folder, "rythm" + ".tsv")
+                midi_paths.append(os.path.join(track_folder, "all_src" + ".mid"))
+                only_parse_rythm = True
+            else:
+                for stem, value in track_metadata["stems"].items():
+                    if not (value["audio_rendered"] and value["midi_saved"]):
+                        continue
+                    if (-1 in midi_programs and value["is_drum"]) or value["program_num"] in midi_programs:
+                        relevant_stems.append(stem)
+                        midi_paths.append(os.path.join(track_folder, "MIDI", stem + ".mid"))
+                relevant_stems.sort()
+                if len(relevant_stems) == 0:
+                    return
 
-            if track in problem_stems:
-                for stem in relevant_stems:
-                    if stem in problem_stems[track]:
-                        print(f"Skipping track {track} because stem {stem} has error '{problem_stems[track][stem]}'")
-                        return
+                if track in problem_stems:
+                    for stem in relevant_stems:
+                        if stem in problem_stems[track]:
+                            print(f"Skipping track {track} because stem {stem} has error '{problem_stems[track][stem]}'")
+                            return
 
-            if self.skip_pitch_bend_track and any(
-                (pitch_bend_info[track][stem]["pitch_bend"] for stem in relevant_stems)
-            ):
-                return
+                if self.skip_pitch_bend_track and any(
+                    (pitch_bend_info[track][stem]["pitch_bend"] for stem in relevant_stems)
+                ):
+                    return
 
-            tsv_filename = os.path.join(track_folder, "-".join(relevant_stems) + ".tsv")
+                tsv_filename = os.path.join(track_folder, "-".join(relevant_stems) + ".tsv")
+
             if not os.path.exists(tsv_filename):
-                midi_data = parse_midis(midi_paths)
+                midi_data = parse_midis(midi_paths, only_parse_rythm=only_parse_rythm)
                 if self.skip_pitch_bend_track and midi_data.contain_pitch_bend:
                     return
                 np.savetxt(
@@ -357,8 +407,9 @@ class SlakhAmtDataset(PianoRollAudioDataset):
                     print(f"Skipping track {track} due to max harmony {max_harmony}")
                     return
 
-            for stem in relevant_stems:
-                all_relevant_stems.add(stem)
+            if len(relevant_stems) > 0:
+                for stem in relevant_stems:
+                    all_relevant_stems.add(stem)
 
         if self.audio == "individual":
             audio_paths = [os.path.join(track_folder, "stems", stem + ".flac") for stem in all_relevant_stems]
@@ -370,18 +421,7 @@ class SlakhAmtDataset(PianoRollAudioDataset):
 
 
     def files(self, group):
-        if self.label_midi_programs is None and self.label_instruments is None:
-            raise RuntimeError("Both `label_midi_programs` and `label_instruments` cannot be None")
-        if self.label_instruments is not None:
-            if isinstance(self.label_instruments, str):
-                label_midi_programs = [instrument_to_midi_programs(self.label_instruments)]
-            else:
-                label_midi_programs = [instrument_to_midi_programs(inst) for inst in self.label_instruments]
-        else:
-            if isinstance(self.label_midi_programs[0], Iterable):
-                label_midi_programs = self.label_midi_programs
-            else:
-                label_midi_programs = [self.label_midi_programs]
+        label_midi_programs = [l["midi_programs"] for l in self.label_info]
         with open(os.path.join(pathlib.Path(__file__).parent.absolute(), "splits", f"{self.split}.json"), "r") as f:
             split_tracks = json.load(f)
 
